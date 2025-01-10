@@ -12,6 +12,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 
 import 'screens/prayer_list_manager_screen.dart';
 import 'services/admin_service.dart';
+import 'dart:math' show sin;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -624,6 +625,47 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   }
 }
 
+// 열기 효과를 위한 CustomPainter
+class HeatWavePainter extends CustomPainter {
+  final double progress;
+  final Color baseColor;
+
+  HeatWavePainter({
+    required this.progress,
+    required this.baseColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          baseColor.withOpacity(0.1 * progress),
+          Colors.transparent,
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+
+    final wave = Path();
+    var y = size.height * 0.5;
+    
+    for (var x = 0.0; x < size.width; x += 20) {
+      y += sin(x * 0.03 + (progress * 2)) * 5;
+      if (x == 0) {
+        wave.moveTo(x, y);
+      } else {
+        wave.lineTo(x, y);
+      }
+    }
+
+    canvas.drawPath(wave, paint);
+  }
+
+  @override
+  bool shouldRepaint(HeatWavePainter oldDelegate) =>
+      progress != oldDelegate.progress || baseColor != oldDelegate.baseColor;
+}
+
+
 class HomeScreen extends StatefulWidget {
   @override
   _HomeScreenState createState() => _HomeScreenState();
@@ -749,11 +791,22 @@ class _HomeScreenState extends State<HomeScreen> {
     return "$hours:$minutes:$seconds";
   }
 
+ 
   Widget _buildThermometer(double totalMinutes) {
     double progress = totalMinutes / targetMinutes;
     int level = (progress * 5).floor();
     bool isComplete = totalMinutes >= targetMinutes;
 
+    // 프로그레스에 따른 색상 및 효과 강도 계산
+    final heatIntensity = progress.clamp(0.0, 1.0);
+    
+    // 프로그레스에 따른 색상 변화
+    final mainColor = Color.lerp(
+      Colors.red.shade400,
+      Colors.deepOrange.shade700,
+      heatIntensity
+    )!;
+    
     if (isComplete) {
       _confettiController.play();
     } else {
@@ -763,20 +816,32 @@ class _HomeScreenState extends State<HomeScreen> {
     return Stack(
       alignment: Alignment.center,
       children: [
+        // 배경 열기 효과
         Container(
           width: double.infinity,
           height: 400,
           decoration: BoxDecoration(
             gradient: RadialGradient(
               center: Alignment.center,
-              radius: 1.0,
+              radius: 1.2 + (heatIntensity * 0.3),
               colors: [
-                thermometerColors[level].withOpacity(0.2),
+                mainColor.withOpacity(0.15 + (heatIntensity * 0.1)),
                 Colors.transparent,
               ],
+              stops: [0.2, 1.0],
             ),
           ),
         ),
+        // 추가적인 열기 효과 (프로그레스가 높을 때)
+        if (progress > 0.5)
+          Positioned.fill(
+            child: CustomPaint(
+              painter: HeatWavePainter(
+                progress: heatIntensity,
+                baseColor: mainColor,
+              ),
+            ),
+          ),
         Center(
           child: Container(
             padding: EdgeInsets.symmetric(horizontal: 40),
@@ -784,17 +849,43 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // 왼쪽 텍스트
-                Text(
-                  '목표\n9182분',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
+                // 왼쪽 목표 표시
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.9),
+                    borderRadius: BorderRadius.circular(15),
+                    boxShadow: [
+                      BoxShadow(
+                        color: mainColor.withOpacity(0.2),
+                        blurRadius: 8 + (heatIntensity * 4),
+                        offset: Offset(2, 2),
+                      ),
+                    ],
                   ),
-                  textAlign: TextAlign.center,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '목표',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.black54,
+                        ),
+                      ),
+                      Text(
+                        '9182분',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                SizedBox(width: 20),
-                // 온도계
+                SizedBox(width: 25),
+                // 온도계 본체
                 Container(
                   width: 100,
                   child: Stack(
@@ -808,47 +899,112 @@ class _HomeScreenState extends State<HomeScreen> {
                             decoration: BoxDecoration(
                               color: Colors.white,
                               border: Border.all(
-                                color: Colors.black,
-                                width: 2,
+                                color: Colors.black87,
+                                width: 2.5,
                               ),
                               borderRadius: BorderRadius.only(
-                                topLeft: Radius.circular(20),
-                                topRight: Radius.circular(20),
+                                topLeft: Radius.circular(25),
+                                topRight: Radius.circular(25),
                               ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: mainColor.withOpacity(0.3),
+                                  blurRadius: 10 + (heatIntensity * 5),
+                                  offset: Offset(3, 3),
+                                ),
+                              ],
                             ),
                             child: Stack(
                               alignment: Alignment.bottomCenter,
                               children: [
+                                // 수은주
                                 AnimatedContainer(
-                                  duration: Duration(milliseconds: 500),
+                                  duration: Duration(milliseconds: 800),
+                                  curve: Curves.easeInOut,
                                   height: 280 * progress.clamp(0.0, 1.0),
-                                  width: 36,
+                                  width: 35,
                                   decoration: BoxDecoration(
-                                    color: Colors.red,
-                                    borderRadius: BorderRadius.circular(10),
+                                    gradient: LinearGradient(
+                                      begin: Alignment.bottomCenter,
+                                      end: Alignment.topCenter,
+                                      colors: [
+                                        mainColor,
+                                        Color.lerp(mainColor, Colors.white, 0.3)!,
+                                      ],
+                                    ),
+                                    borderRadius: BorderRadius.circular(15),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: mainColor.withOpacity(0.3 + (heatIntensity * 0.2)),
+                                        blurRadius: 8 + (heatIntensity * 4),
+                                        offset: Offset(0, -2),
+                                      ),
+                                    ],
                                   ),
                                 ),
+                                // 열기 효과
+                                if (progress > 0.7)
+                                  Positioned(
+                                    top: 0,
+                                    child: Container(
+                                      width: 35,
+                                      height: 50,
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          begin: Alignment.bottomCenter,
+                                          end: Alignment.topCenter,
+                                          colors: [
+                                            mainColor.withOpacity(0.3),
+                                            mainColor.withOpacity(0),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                               ],
                             ),
                           ),
+                          // 온도계 하단 구
                           Container(
-                            width: 80,
-                            height: 80,
+                            width: 85,
+                            height: 85,
                             decoration: BoxDecoration(
-                              color: Colors.red,
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  mainColor,
+                                  Color.lerp(mainColor, Colors.red.shade800, 0.3)!,
+                                ],
+                              ),
                               shape: BoxShape.circle,
                               border: Border.all(
-                                color: Colors.black,
-                                width: 2,
+                                color: Colors.black87,
+                                width: 2.5,
                               ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: mainColor.withOpacity(0.3 + (heatIntensity * 0.2)),
+                                  blurRadius: 12 + (heatIntensity * 8),
+                                  spreadRadius: heatIntensity * 2,
+                                  offset: Offset(3, 3),
+                                ),
+                              ],
                             ),
                             child: Center(
                               child: Text(
                                 '${totalMinutes.toInt()}',
                                 style: TextStyle(
                                   color: Colors.white,
-                                  fontSize: 24,
+                                  fontSize: 26,
                                   fontWeight: FontWeight.bold,
+                                  shadows: [
+                                    Shadow(
+                                      color: Colors.black26,
+                                      blurRadius: 2,
+                                      offset: Offset(1, 1),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
@@ -859,30 +1015,38 @@ class _HomeScreenState extends State<HomeScreen> {
                       Positioned(
                         left: 53,
                         top: 0,
-                        bottom: 80,
+                        bottom: 92,
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: List.generate(10, (index) {
-                            // 첫 번째(9182)와 마지막(0) 눈금은 그대로 표시
                             final value = index == 0
                                 ? 9182
                                 : index == 9
                                     ? 0
-                                    : (9000 - (index * 1000)); // 나머지는 1000 단위로
+                                    : (9000 - (index * 1000));
 
                             return Row(
                               children: [
                                 Container(
                                   width: 15,
-                                  height: 2,
-                                  color: Colors.black,
+                                  height: 1.5,
+                                  decoration: BoxDecoration(
+                                    color: Colors.black87,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black12,
+                                        blurRadius: 1,
+                                      ),
+                                    ],
+                                  ),
                                 ),
                                 SizedBox(width: 4),
                                 Text(
                                   '$value',
                                   style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.black87,
                                   ),
                                 ),
                               ],
@@ -893,20 +1057,47 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                 ),
-                SizedBox(width: 20),
-                // 오른쪽 텍스트
-                Text(
-                  '현재(누적)\n${totalMinutes.toInt()}분',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
+                SizedBox(width: 25),
+                // 오른쪽 현재값 표시
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.9),
+                    borderRadius: BorderRadius.circular(15),
+                    boxShadow: [
+                      BoxShadow(
+                        color: mainColor.withOpacity(0.2),
+                        blurRadius: 8 + (heatIntensity * 4),
+                        offset: Offset(2, 2),
+                      ),
+                    ],
                   ),
-                  textAlign: TextAlign.center,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '현재(누적)',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.black54,
+                        ),
+                      ),
+                      Text(
+                        '${totalMinutes.toInt()}분',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
         ),
+        // 축하 효과
         Positioned.fill(
           child: ConfettiWidget(
             confettiController: _confettiController,
@@ -918,32 +1109,44 @@ class _HomeScreenState extends State<HomeScreen> {
             shouldLoop: true,
             colors: const [
               Colors.red,
-              Colors.blue,
+              Colors.orange,
               Colors.yellow,
-              Colors.green,
-              Colors.purple,
+              Colors.deepOrange,
+              Colors.redAccent,
             ],
           ),
         ),
         if (isComplete)
           Container(
-            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            padding: EdgeInsets.symmetric(horizontal: 25, vertical: 12),
             decoration: BoxDecoration(
-              color: Colors.yellow,
-              borderRadius: BorderRadius.circular(20),
+              gradient: LinearGradient(
+                colors: [
+                  Colors.yellow.shade300,
+                  Colors.yellow.shade400,
+                ],
+              ),
+              borderRadius: BorderRadius.circular(25),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black26,
-                  blurRadius: 10,
+                  color: mainColor.withOpacity(0.4),
+                  blurRadius: 15,
+                  offset: Offset(0, 4),
                 ),
               ],
             ),
             child: Text(
               '목표달성!',
               style: TextStyle(
-                fontSize: 24,
+                fontSize: 26,
                 fontWeight: FontWeight.bold,
-                color: Colors.red,
+                color: Colors.red.shade600,
+                shadows: [
+                  Shadow(
+                    color: Colors.white,
+                    blurRadius: 10,
+                  ),
+                ],
               ),
             ),
           ),
